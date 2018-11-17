@@ -3,6 +3,10 @@
  * Convert the flat divisions JSON data into structured data.
  *
  * Reads from a file (first argument) and writes to standard out.
+ *
+ * Example use:
+ *
+ *    php heirarchify.php divisions.json > heirarchy.json
  */
 
 /**
@@ -117,49 +121,6 @@ class OrganizationConverter
     return $this->structured;
   }
 }
-
-
-// The new data structure.
-$structured = new Organization('government', 'Yukon', 0, NULL);
-
-// Loop through all of the records.
-// Department must be set, all other levels are optional.
-foreach ($records as $row) {
-
-  // Deal with departments.
-  if ($row->department) {
-    if (!$structured->hasChild($row->department)) {
-      $structured->newChildFromRecord($row);
-    }
-    $department = $structured->getChild($row->department);
-
-    // Deal with divisions.
-    if (isset($row->division)) {
-      if (!$department->hasChild($row->division)) {
-        $department->newChildFromRecord($row);
-      }
-
-      // Deal with branches.
-      if (isset($row->branch)) {
-        $division = $department->getChild($row->division);
-        if (!$division->hasChild($row->branch)) {
-          $division->newChildFromRecord($row);
-        }
-
-        // Deal with units.
-        if (isset($row->unit)) {
-          $branch = $division->getChild($row->branch);
-          if (!$branch->hasChild($row->unit)) {
-            $branch->newChildFromRecord($row);
-          }
-        }
-      }
-    }
-  }
-}
-
-// Output the new structure.
-echo(json_encode($structured));
 
 /**
  * JsonDivistionsFromFile
