@@ -1,8 +1,12 @@
 <?php
-
 /**
  * @file
- * Experiments in connecting to LDAP from PHP.
+ * Download the thumbnail for a given user.
+ *
+ * Argument is a CN, like "Lee.Omara"
+ *
+ * Output is the name of the file, which is also written to the "thumbnails"
+ * directory.
  */
 
 define('YNET_LDAP_HOST', 'adauth.ynet.gov.yk.ca');
@@ -19,7 +23,12 @@ error_reporting(E_ALL);
 ini_set("display_errors", 1);
 
 $storage_path = "./thumbnails/";
-$ldap_query = "cn=Mark.Burns";
+
+if (empty($argv[1])) {
+  trigger_error("first argument must be a CN", E_USER_ERROR);
+  exit(1);
+}
+$ldap_query = "cn=".$argv[1];
 
 // Debug all the things! Crank up the debug information for LDAP. via:
 // http://stackoverflow.com/questions/23829422/ldap-search-function-very-slow
@@ -30,7 +39,7 @@ $ldap_query = "cn=Mark.Burns";
 // connection details and tests their syntactic validity.
 $ds = ldap_connect(YNET_LDAP_HOST);
 if (!$ds) {
-  print "Connection looks bad.\n";
+  trigger_error("Connection looks bad.", E_USER_ERROR);
   exit;
 }
 
@@ -46,7 +55,7 @@ ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 
 
 if(!ldap_start_tls($ds)) {
-  echo "Start TLS failed\n";
+  trigger_error("Start TLS failed", E_USER_ERROR);
   exit;
 }
 
@@ -60,10 +69,17 @@ if ($r) {
   $size_limit = 5;
   $time_limit = 10;
   $sr = ldap_search($ds, YNET_LDAP_BASE_DN, $ldap_query, $justthese, $attributes_only, $size_limit, $time_limit);
-  // $sr = ldap_search($ds, YNET_LDAP_BASE_DN, "cn=Lee.Omara", $justthese, $attributes_only, $size_limit, $time_limit);
-  // $sr = ldap_search($ds, YNET_LDAP_BASE_DN, "cn=Geof.Harries", $justthese, $attributes_only, $size_limit, $time_limit);
 
   $info = ldap_get_entries($ds, $sr);
+
+  if ($info["count"] == 0) {
+    // No matches found.
+    exit;
+  }
+  // More than 1 results is also problematic.
+  if ($info['count'] > 1) {
+    trigger_error("More than one results returned, using first thumbnail", E_USER_NOTICE);
+  }
 
   for ($i = 0; $i < $info["count"]; $i++) {
     if (isset($info[$i]['thumbnailphoto'][0])) {
@@ -74,16 +90,23 @@ if ($r) {
       $extension = mime2ext($finfo->file($tempFile));
       $filename = $info[$i]['cn'][0] . "." . $extension;
       $file = fopen($storage_path . $filename, 'w');
-      fwrite($file, $imageString);
+      if (!$file) {
+        trigger_error("Unable to create file " . $filename, E_USER_ERROR);
+        exit;
+      }
+      if (!fwrite($file, $imageString)) {
+        trigger_error("Unable to write thumbnail " . $filename, E_USER_ERROR);
+        exit;
+      }
       fclose($file);
-      // $mime  = explode(';', $finfo->file($tempFile));
-      // echo '<img src="data:' . $mime[0] . ';base64,' . base64_encode($imageString) . '"/>';
+      echo $filename;
+      continue;
     }
   }
   ldap_unbind($ds);
 }
 else {
-  print "Unable to connect to LDAP server\n";
+  trigger_error("Unable to connect to LDAP server", E_USER_ERROR);
   exit;
 }
 
